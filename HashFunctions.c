@@ -48,3 +48,32 @@ char* search(hashRecord** table, size_t table_size, const char* key)
     return NULL; // Record not found
 
 }
+
+// Added updateSalary 11/15/2025 CB
+int updateSalary(hashRecord** table, size_t table_size,
+                 const char* key, uint32_t new_salary)
+{
+    uint32_t hash = one_at_a_time_hash((const uint8_t*)key, strlen(key));
+    size_t index = hash % table_size;
+
+    // Acquire write lock for this bucket
+    // rwlock_aquire_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+
+    hashRecord* current = table[index];
+
+    while (current != NULL) {
+        if (strcmp(current->name, key) == 0) {
+            // Found the record; update salary
+            current->salary = new_salary;
+
+            // Release write lock and return success
+            // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+            return 1;
+        }
+        current = current->next;
+    }
+
+    // Not found
+    // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+    return 0;
+}
