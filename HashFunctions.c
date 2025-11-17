@@ -77,3 +77,39 @@ int updateSalary(hashRecord** table, size_t table_size,
     // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
     return 0;
 }
+
+// Added delete(), 11/16/2025, Kimari Guthre
+// Making assumption that each hashRecord in table is dynamically allocated.
+int delete(hashRecord** table, size_t table_size, const char* key) {
+    // Following convention of updateSalary(), not relying on search...
+    size_t index = one_at_a_time_hash((const uint8_t*)key, strlen(key)) % table_size;
+
+    // Acquire write lock for this bucket
+    // rwlock_aquire_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+
+    // Since each bucket is a linked list, need to keep past entry to stitch list back together.
+    hashRecord* past = NULL;
+    hashRecord* current = table[index];
+
+    while (current != NULL) {
+        if (strcmp(current->name, key) == 0) {
+            // Found the record, proceed with delete.
+            if (past != NULL)
+                past->next = current->next;
+            else
+                table[index] = current->next;
+            
+            free(current);
+
+            // Release lock and return success.
+            // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+            return 1;
+        }
+        past = current;
+        current = current->next;
+    }
+
+    // Not found
+    // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+    return 0;
+}
