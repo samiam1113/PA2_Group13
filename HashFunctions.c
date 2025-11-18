@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>  
 
 
 typedef struct hash_struct
@@ -11,6 +12,13 @@ typedef struct hash_struct
   uint32_t salary;
   struct hash_struct *next;
 } hashRecord;
+
+//collect/sort snapshot
+typedef struct {
+    uint32_t hash;
+    char     name[50];
+    uint32_t salary;
+} _print_row_t;
 
 uint32_t one_at_a_time_hash(const uint8_t* key, size_t length)
 {
@@ -113,3 +121,87 @@ int delete(hashRecord** table, size_t table_size, const char* key) {
     // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
     return 0;
 }
+
+//Added print functions: Jasmine Narayan 11/18
+// Sort by hash, then by name for deterministic output
+static int _print_row_cmp(const void *a, const void *b) {
+    const _print_row_t *ra = (const _print_row_t*)a;
+    const _print_row_t *rb = (const _print_row_t*)b;
+    if (ra->hash < rb->hash) return -1;
+    if (ra->hash > rb->hash) return  1;
+    return strcmp(ra->name, rb->name);
+}
+
+// Minimal logger using clock() (avoid struct timeval)
+static long long _now_us_local(void) {
+    return (long long)((double)clock() * 1000000.0 / (double)CLOCKS_PER_SEC);
+}
+static void _log_line_local(FILE *logf, int priority, const char *msg) {
+    if (!logf) return;
+    fprintf(logf, "%lld THREAD %d %s\n", _now_us_local(), priority, msg);
+    fflush(logf);
+}
+
+// Takes a READ lock per bucket, snapshots all nodes, sorts by hash->name, prints a stable listing
+ /*
+ * Usage from PRINT thread:
+ *   FILE *logf = fopen("hash.log","a"); // or reuse a shared FILE*
+ *   print_table(table, table_size, my_priority, logf, stdout);
+ */
+void print_table(hashRecord **table,
+                 size_t table_size,
+                 int priority,
+                 FILE *logf,
+                 FILE *out)
+{
+    if (!table || !out) return;
+
+    size_t cap = 64, n = 0;
+    _print_row_t *rows = (_print_row_t*)malloc(cap * sizeof(_print_row_t));
+    if (!rows) return;
+
+    for (size_t i = 0; i < table_size; i++) {
+        // Acquire READ lock for this bucket if you have locks[]
+        // rwlock_aquire_readlock(&locks[i]);  // UNCOMMENT IF USING LOCKS
+        _log_line_local(logf, priority, "-READY READ LOCK ACQUIRED");
+
+        for (hashRecord *cur = table[i]; cur; cur = cur->next) {
+            if (n == cap) {
+                cap *= 2;
+                _print_row_t *tmp = (_print_row_t*)realloc(rows, cap * sizeof(_print_row_t));
+                if (!tmp) { /* OOM */ break; }
+                rows = tmp;
+            }
+
+            // Use stored hash if present; otherwise compute defensively
+            uint32_t h = cur->hash ? cur->hash
+                                   : one_at_a_time_hash((const uint8_t*)cur->name,
+                                                        strlen(cur->name));
+
+            rows[n].hash = h;
+            // Copy name safely (struct has name[50])
+            strncpy(rows[n].name, cur->name, sizeof(rows[n].name));
+            rows[n].name[sizeof(rows[n].name) - 1] = '\0';
+            rows[n].salary = cur->salary;
+            n++;
+        }
+
+        // rwlock_release_readlock(&locks[i]);  // UNCOMMENT IF USING LOCKS
+        _log_line_local(logf, priority, "-READY READ LOCK RELEASED");
+    }
+
+    // Deterministic order for grading
+    qsort(rows, n, sizeof(_print_row_t), _print_row_cmp);
+
+    // Adjust format to match your rubric exactly if neede
+    fprintf(out, "PRINT Current Database:\n");
+    for (size_t i = 0; i < n; i++) {
+        // Format: <hash>,<name>,<salary>
+        fprintf(out, "%u,%s,%u\n", rows[i].hash, rows[i].name, rows[i].salary);
+    }
+
+    free(rows);
+}
+
+//if not logging yet, pass NULL for logf, logging is optional
+// if we have a locks[]array, uncomment the two lines in the loop to acquire/release READ locks
