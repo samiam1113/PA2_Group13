@@ -102,31 +102,37 @@ int insert(hashRecord **table, size_t table_size, const char *name, uint32_t sal
 }
 
 // Added updateSalary 11/15/2025 CB
-int updateSalary(hashRecord** table, size_t table_size,
-                 const char* key, uint32_t new_salary)
+// Returns 1 on success, 0 if key not found.
+// If successful and old_salary_out != NULL, writes the previous salary there.
+int updateSalary(hashRecord **table, size_t table_size,
+                 const char *key, uint32_t new_salary,
+                 uint32_t *old_salary_out)
 {
-    uint32_t hash = one_at_a_time_hash((const uint8_t*)key, strlen(key));
-    size_t index = hash % table_size;
+    // Compute hash and bucket index
+    uint32_t hash  = one_at_a_time_hash((const uint8_t *)key, strlen(key));
+    size_t   index = hash % table_size;
 
     // Acquire write lock for this bucket
-    // rwlock_aquire_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+    rwlock_aquire_writelock(&locks[index]);   // locks[] defined elsewhere
 
-    hashRecord* current = table[index];
+    hashRecord *current = table[index];
 
     while (current != NULL) {
         if (strcmp(current->name, key) == 0) {
-            // Found the record; update salary
+            // Found the record; capture old salary then update
+            if (old_salary_out != NULL) {
+                *old_salary_out = current->salary;
+            }
             current->salary = new_salary;
 
-            // Release write lock and return success
-            // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+            rwlock_release_writelock(&locks[index]);
             return 1;
         }
         current = current->next;
     }
 
     // Not found
-    // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+    rwlock_release_writelock(&locks[index]);
     return 0;
 }
 
