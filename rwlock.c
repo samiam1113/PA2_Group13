@@ -10,33 +10,62 @@
 // } rwlock_t;
 
 void rwlock_init(rwlock_t *lock) {
-    lock->readers = 0;
-    Sem_init(&lock->lock, 1); 
-    Sem_init(&lock->writelock, 1); 
+    pthread_mutex_init(&lock->lock, NULL);
+    pthread_cond_init(&lock->readers, NULL);
+    pthread_cond_init(&lock->writers, NULL);
+    lock->active_readers = 0;
+    lock->active_writers = 0;
+    lock->waiting_writers = 0;
 }
 
 void rwlock_acquire_readlock(rwlock_t *lock) {
-    Sem_wait(&lock->lock);
-    lock->readers++;
-    if (lock->readers == 1)
-	Sem_wait(&lock->writelock);
-    Sem_post(&lock->lock);
+    pthread_mutex_lock(&lock->lock);
+    
+    while (lock->active_writers > 0 || lock->waiting_writers > 0) {
+        pthread_cond_wait(&lock->readers, &lock->lock);
+    }
+    
+    lock->active_readers++;
+    pthread_mutex_unlock(&lock->lock);
 }
 
 void rwlock_release_readlock(rwlock_t *lock) {
-    Sem_wait(&lock->lock);
-    lock->readers--;
-    if (lock->readers == 0)
-	Sem_post(&lock->writelock);
-    Sem_post(&lock->lock);
+    pthread_mutex_lock(&lock->lock);
+    lock->active_readers--;
+    
+    if (lock->active_readers == 0) {
+        pthread_cond_signal(&lock->writers);
+    }
+    
+    pthread_mutex_unlock(&lock->lock);
 }
 
 void rwlock_acquire_writelock(rwlock_t *lock) {
-    Sem_wait(&lock->writelock);
+    pthread_mutex_lock(&lock->lock);
+    
+    lock->waiting_writers++;
+    while (lock->active_readers > 0 || lock->active_writers > 0) {
+        pthread_cond_wait(&lock->writers, &lock->lock);
+    }
+    lock->waiting_writers--;
+    
+    lock->active_writers++;
+    pthread_mutex_unlock(&lock->lock);
 }
 
 void rwlock_release_writelock(rwlock_t *lock) {
-    Sem_post(&lock->writelock);
+    pthread_mutex_lock(&lock->lock);
+    lock->active_writers--;
+    
+    // Wake up waiting writers first (writer preference)
+    if (lock->waiting_writers > 0) {
+        pthread_cond_signal(&lock->writers);
+    } else {
+        // No waiting writers, wake up all readers
+        pthread_cond_broadcast(&lock->readers);
+    }
+    
+    pthread_mutex_unlock(&lock->lock);
 }
 
 int read_loops;
@@ -46,6 +75,7 @@ int counter = 0;
 rwlock_t mutex;
 
 void *reader(void *arg) {
+    (void)arg;
     int i;
     int local = 0;
     for (i = 0; i < read_loops; i++) {
@@ -59,6 +89,7 @@ void *reader(void *arg) {
 }
 
 void *writer(void *arg) {
+    (void)arg;
     int i;
     for (i = 0; i < write_loops; i++) {
 	rwlock_acquire_writelock(&mutex);
@@ -68,22 +99,3 @@ void *writer(void *arg) {
     printf("write done\n");
     return NULL;
 }
-
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
-	fprintf(stderr, "usage: rwlock readloops writeloops\n");
-	exit(1);
-    }
-    read_loops = atoi(argv[1]);
-    write_loops = atoi(argv[2]);
-    
-    rwlock_init(&mutex); 
-    pthread_t c1, c2;
-    Pthread_create(&c1, NULL, reader, NULL);
-    Pthread_create(&c2, NULL, writer, NULL);
-    Pthread_join(c1, NULL);
-    Pthread_join(c2, NULL);
-    printf("all done\n");
-    return 0;
-}
-    

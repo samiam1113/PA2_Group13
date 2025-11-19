@@ -1,8 +1,10 @@
+#define _TIMESPEC_DEFINED
 #include "hash_logger.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
 #include <pthread.h>
+#include <sys/time.h>
+
 
 static FILE *g_logf = NULL;
 static pthread_mutex_t g_log_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -35,7 +37,7 @@ long long current_timestamp() {
 void log_thread_msg(int priority, const char *msg) {
     pthread_mutex_lock(&g_log_lock);
     if (!g_logf) g_logf = stdout;
-    fprintf(g_logf, "%lld: THREAD %d %s\n", current_timestamp(), priority, msg);
+    fprintf(g_logf, "%lld: THREAD %d %s\n", current_timestamp(), (int)priority, msg);
     fflush(g_logf);
     pthread_mutex_unlock(&g_log_lock);
 }

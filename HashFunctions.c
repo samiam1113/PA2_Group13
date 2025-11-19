@@ -229,7 +229,7 @@ static int _print_row_cmp(const void *a, const void *b) {
 void print_table(hashRecord **table,
                  size_t table_size,
                  int priority,
-                 //FILE *logf,
+                 FILE *logf,
                  FILE *out, rwlock_t *locks)
 {
     if (!table || !out) return;

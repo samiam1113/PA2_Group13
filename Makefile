@@ -1,6 +1,7 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -pthread
+CFLAGS = -Wall -Wextra -D_TIMESPEC_DEFINED
+LDFLAGS = -L. -lpthreadGC2
 
 # List of all .c files
 SRCS = chash.c HashFunctions.c hash_logger.c rwlock.c
@@ -16,7 +17,7 @@ all: $(TARGET)
 
 # Link the final program
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+	$(CC) -o $(TARGET) $(OBJS) $(LDFLAGS)
 
 # Compile each .c to .o
 %.o: %.c

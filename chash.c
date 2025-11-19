@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#define _TIMESPEC_DEFINED
 #include <pthread.h>
 #include <sys/time.h>
 #include "HashFunctions.h"

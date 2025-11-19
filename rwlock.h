@@ -1,6 +1,7 @@
 #ifndef RWLOCK_H
 #define RWLOCK_H
-#include "HashFunctions.h"
+
+#define _TIMESPEC_DEFINED
 #include <pthread.h>
 
 typedef struct rwlock_t {
