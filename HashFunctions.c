@@ -57,6 +57,50 @@ char* search(hashRecord** table, size_t table_size, const char* key)
 
 }
 
+// Added insert() 11/18/2025 Arianna R.
+int insert(hashRecord **table, size_t table_size, const char *name, uint32_t salary)
+{
+    // calling Jenkins hash func
+    uint32_t hash = one_at_a_time_hash((const uint8_t*)name, strlen(name));
+    // finding record bucket
+    size_t index = hash % table_size;
+
+    // for multi-threading acquire write lock
+    // rwlock_aquire_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+
+    hashRecord *current = table[index];
+    // walking to ensure our current doesnt already exist
+    while (current != NULL) {
+        if (strcmp(current->name, name) == 0) {
+            // if name exists in list return error
+            // rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+            return 0;
+        }
+        current = current->next;
+    }
+
+    // doesnt exist so make a new node
+    hashRecord *newNode = (hashRecord*)malloc(sizeof(hashRecord));
+    if (!newNode) {
+        // rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+        return -1; //failed :P
+    }
+
+    // init new node
+    newNode->hash = hash;
+    strncpy(newNode->name, name, sizeof(newNode->name));
+    newNode->name[sizeof(newNode->name) - 1] = '\0';
+    newNode->salary = salary;
+
+    // insert new node at head of bucket list
+    newNode->next = table[index];
+    table[index] = newNode;
+
+    // rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+    return 1;
+    // done! if it works itll return 1
+}
+
 // Added updateSalary 11/15/2025 CB
 int updateSalary(hashRecord** table, size_t table_size,
                  const char* key, uint32_t new_salary)
