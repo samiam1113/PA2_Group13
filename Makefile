@@ -1,31 +1,25 @@
-# Compiler and flags
-CC = gcc
-CFLAGS = -Wall -Wextra -D_TIMESPEC_DEFINED
-LDFLAGS = -L. -lpthreadGC2
+# ===== PA2 Makefile (MSYS2 / MinGW-w64, pthreads) =====
 
-# List of all .c files
-SRCS = chash.c HashFunctions.c hash_logger.c rwlock.c
+CC      := gcc
+CFLAGS  := -std=c11 -Wall -Wextra -O2
+LDFLAGS := -pthread -lwinpthread
+BIN     := chash
+SRC     := chash.c HashFunctions.c
+OBJ     := $(SRC:.c=.o)
 
-# Automatically generate a list of .o files
-OBJS = $(SRCS:.c=.o)
+.PHONY: all run clean
 
-# Main executable is chash
-TARGET = chash
+all: $(BIN)
 
-# Default build rule
-all: $(TARGET)
+$(BIN): $(OBJ)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-# Link the final program
-$(TARGET): $(OBJS)
-	$(CC) -o $(TARGET) $(OBJS) $(LDFLAGS)
-
-# Compile each .c to .o
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Remove build files
-clean:
-	rm -f $(OBJS) $(TARGET)
+# run with commands.txt (no other filenames)
+run: $(BIN)
+	./$(BIN) commands.txt
 
-# Optional: rebuild everything
-rebuild: clean all
+clean:
+	rm -f $(OBJ) $(BIN) $(BIN).exe hash.log
