@@ -4,6 +4,14 @@
 #include <stdint.h>
 #include <time.h>  
 
+// Temporary rwlock implementation stubs, comment out when real locks are used
+typedef struct { int _dummy; } rwlock_t;
+rwlock_t *locks = NULL;
+
+static void rwlock_aquire_writelock(rwlock_t *l)  { (void)l; }
+static void rwlock_release_writelock(rwlock_t *l) { (void)l; }
+static void rwlock_aquire_readlock(rwlock_t *l)   { (void)l; }
+static void rwlock_release_readlock(rwlock_t *l)  { (void)l; }
 
 typedef struct hash_struct
 {
@@ -56,7 +64,7 @@ char* search(hashRecord** table, size_t table_size, const char* key)
     return NULL; // Record not found
 
 }
-
+// MARK: Insert
 // Added insert() 11/18/2025 Arianna R.
 int insert(hashRecord **table, size_t table_size, const char *name, uint32_t salary)
 {
@@ -101,6 +109,7 @@ int insert(hashRecord **table, size_t table_size, const char *name, uint32_t sal
     // done! if it works itll return 1
 }
 
+//MARK: Update Salary
 // Added updateSalary 11/15/2025 CB
 // Returns 1 on success, 0 if key not found.
 // If successful and old_salary_out != NULL, writes the previous salary there.
@@ -136,6 +145,7 @@ int updateSalary(hashRecord **table, size_t table_size,
     return 0;
 }
 
+// MARK: Delete
 // Added delete(), 11/16/2025, Kimari Guthre
 // Making assumption that each hashRecord in table is dynamically allocated.
 int delete(hashRecord** table, size_t table_size, const char* key) {
@@ -172,6 +182,7 @@ int delete(hashRecord** table, size_t table_size, const char* key) {
     return 0;
 }
 
+// MARK: Print
 //Added print functions: Jasmine Narayan 11/18
 // Sort by hash, then by name for deterministic output
 static int _print_row_cmp(const void *a, const void *b) {
