@@ -43,24 +43,25 @@ uint32_t one_at_a_time_hash(const uint8_t* key, size_t length)
     return hash;
 }
 
+// Samantha R 11/14/2025
 char* search(hashRecord** table, size_t table_size, const char* key)
 {
     uint32_t hash = one_at_a_time_hash((const uint8_t*)key, strlen(key));
     size_t index = hash % table_size;
 
     //aquire read lock
-    //rwlock_aquire_readlock(&locks[index]); UNCOMMENT THIS LINE IF USING LOCKS
+    rwlock_aquire_readlock(&locks[index]); //UNCOMMENT THIS LINE IF USING LOCKS
 
     hashRecord* current = table[index];
     while (current != NULL) {
         if (strcmp(current->name, key) == 0) {
             char* result = current->name;// Found the record
-            //rwlock_release_readlock(&locks[index]); UNCOMMENT THIS LINE IF USING LOCKS
+            rwlock_release_readlock(&locks[index]); // UNCOMMENT THIS LINE IF USING LOCKS
             return result;
         }
         current = current->next;
     }
-    //rwlock_release_readlock(&locks[index]); UNCOMMENT THIS LINE IF USING LOCKS
+    rwlock_release_readlock(&locks[index]); // UNCOMMENT THIS LINE IF USING LOCKS
     return NULL; // Record not found
 
 }
@@ -74,14 +75,14 @@ int insert(hashRecord **table, size_t table_size, const char *name, uint32_t sal
     size_t index = hash % table_size;
 
     // for multi-threading acquire write lock
-    // rwlock_aquire_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+     rwlock_aquire_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
 
     hashRecord *current = table[index];
     // walking to ensure our current doesnt already exist
     while (current != NULL) {
         if (strcmp(current->name, name) == 0) {
             // if name exists in list return error
-            // rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+             rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
             return 0;
         }
         current = current->next;
@@ -90,7 +91,7 @@ int insert(hashRecord **table, size_t table_size, const char *name, uint32_t sal
     // doesnt exist so make a new node
     hashRecord *newNode = (hashRecord*)malloc(sizeof(hashRecord));
     if (!newNode) {
-        // rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+        rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
         return -1; //failed :P
     }
 
@@ -104,7 +105,7 @@ int insert(hashRecord **table, size_t table_size, const char *name, uint32_t sal
     newNode->next = table[index];
     table[index] = newNode;
 
-    // rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
+     rwlock_release_writelock(&locks[index]);   // UNCOMMENT IF USING LOCKS
     return 1;
     // done! if it works itll return 1
 }
@@ -153,7 +154,7 @@ int delete(hashRecord** table, size_t table_size, const char* key) {
     size_t index = one_at_a_time_hash((const uint8_t*)key, strlen(key)) % table_size;
 
     // Acquire write lock for this bucket
-    // rwlock_aquire_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+    rwlock_aquire_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
 
     // Since each bucket is a linked list, need to keep past entry to stitch list back together.
     hashRecord* past = NULL;
@@ -170,7 +171,7 @@ int delete(hashRecord** table, size_t table_size, const char* key) {
             free(current);
 
             // Release lock and return success.
-            // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+            rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
             return 1;
         }
         past = current;
@@ -178,7 +179,7 @@ int delete(hashRecord** table, size_t table_size, const char* key) {
     }
 
     // Not found
-    // rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
+    rwlock_release_writelock(&locks[index]);  // UNCOMMENT IF USING LOCKS
     return 0;
 }
 
