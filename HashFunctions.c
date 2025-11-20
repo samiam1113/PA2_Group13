@@ -321,7 +321,7 @@ void print_table(hashRecord **table,
     for (size_t i = 0; i < table_size; i++) {
         // Acquire READ lock for this bucket if you have locks[]
         // rwlock_aquire_readlock(&locks[i]);  // UNCOMMENT IF USING LOCKS
-        _log_line_local(logf, priority, "-READY READ LOCK ACQUIRED");
+        _log_line_local(logf, priority, "READ LOCK ACQUIRED");
 
         for (hashRecord *cur = table[i]; cur; cur = cur->next) {
             if (n == cap) {
@@ -345,7 +345,7 @@ void print_table(hashRecord **table,
         }
 
         // rwlock_release_readlock(&locks[i]);  // UNCOMMENT IF USING LOCKS
-        _log_line_local(logf, priority, "-READY READ LOCK RELEASED");
+        _log_line_local(logf, priority, "READ LOCK RELEASED");
     }
 
     // Deterministic order for grading
