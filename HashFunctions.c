@@ -6,6 +6,22 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <sys/time.h>
+//#include "rwlock.c"
+
+
+// // Prototypes & globals provided by rwlock.c
+// typedef struct _rwlock_t {
+//     sem_t writelock;
+//     sem_t lock;
+//     int readers;
+// } rwlock_t;
+
+// void rwlock_init(rwlock_t *rw);
+// void rwlock_acquire_readlock(rwlock_t *rw, int priority);
+// void rwlock_release_readlock(rwlock_t *rw, int priority);
+// void rwlock_acquire_writelock(rwlock_t *rw, int priority);
+// void rwlock_release_writelock(rwlock_t *rw, int priority);
+// void rwlock_destroy(rwlock_t *rw);
 
 // ========== Timestamp and Logging ==========
 long long current_timestamp() {
@@ -18,9 +34,17 @@ long long current_timestamp() {
 // Global log file pointer - set this before operations
 FILE *global_log = NULL;
 
+// logger function
 void log_message(int priority, const char *message) {
     if (!global_log) return;
     fprintf(global_log, "%lld: THREAD %d %s\n", current_timestamp(), priority, message);
+    fflush(global_log);
+}
+
+// action logger function (like if you insert itll say that on hash.log)
+void action_msg(int priority, const char *action, uint32_t hash, const char *name, uint32_t salary) {
+    if (!global_log) return;
+    fprintf(global_log, "%lld: THREAD %d %s %d %s %d\n", current_timestamp(), priority, action, hash, name, salary);
     fflush(global_log);
 }
 
@@ -130,70 +154,66 @@ char* search(hashRecord** table, size_t table_size, const char* key, int priorit
     uint32_t hash = one_at_a_time_hash((const uint8_t*)key, strlen(key));
     size_t index = hash % table_size;
 
-    char log_buf[256];
-    snprintf(log_buf, sizeof(log_buf), "SEARCH,%u,%s", hash, key);
-    log_message(priority, log_buf);
-
-    // Acquire read lock
+    //acquire read lock and log
+    // action_msg(priority, "SEARCH" , hash, key, 0);
     rwlock_acquire_readlock(&locks[index], priority);
 
     hashRecord* current = table[index];
+    //traverses and prints if found
     while (current != NULL) {
         if (strcmp(current->name, key) == 0) {
-            char* result = current->name; // Found the record
+            //log here for salary
+            action_msg(priority, "SEARCH" , hash, key, current->salary);
+            printf("Found: %u,%s,%u\n", current->hash, current->name, current->salary);
             rwlock_release_readlock(&locks[index], priority);
-            return result;
+            return current->name;
         }
         current = current->next;
     }
+
+    //if not found
+    printf("%s not found\n", key);
+
     rwlock_release_readlock(&locks[index], priority);
-    return NULL; // Record not found
+    return NULL;
 }
+
+
 // MARK: Insert
 // Added insert() 11/18/2025 Arianna R.
 int insert(hashRecord **table, size_t table_size, const char *name, uint32_t salary, int priority)
 {
-    // Calling Jenkins hash func
     uint32_t hash = one_at_a_time_hash((const uint8_t*)name, strlen(name));
-    // Finding record bucket
     size_t index = hash % table_size;
-
-    char log_buf[256];
-    snprintf(log_buf, sizeof(log_buf), "INSERT,%u,%s,%u", hash, name, salary);
-    log_message(priority, log_buf);
-
-    // For multi-threading acquire write lock
+    
+    //acquire write lock and log
+    action_msg(priority, "INSERT" , hash, name, salary);
     rwlock_acquire_writelock(&locks[index], priority);
 
     hashRecord *current = table[index];
-    // Walking to ensure our current doesn't already exist
     while (current != NULL) {
         if (strcmp(current->name, name) == 0) {
-            // If name exists in list return error
             rwlock_release_writelock(&locks[index], priority);
-            return 0;
+            return 0; // already exists
         }
         current = current->next;
     }
 
-    // Doesn't exist so make a new node
+    //make a new node and init info
     hashRecord *newNode = (hashRecord*)malloc(sizeof(hashRecord));
-    if (!newNode) {
-        rwlock_release_writelock(&locks[index], priority);
-        return -1; // Failed
-    }
-
-    // Init new node
     newNode->hash = hash;
-    strncpy(newNode->name, name, sizeof(newNode->name));
-    newNode->name[sizeof(newNode->name) - 1] = '\0';
+    strncpy(newNode->name, name, 50);
+    newNode->name[49] = '\0';
     newNode->salary = salary;
 
-    // Insert new node at head of bucket list
     newNode->next = table[index];
     table[index] = newNode;
 
     rwlock_release_writelock(&locks[index], priority);
+
+    // Output as expected
+    printf("Inserted %u,%s,%u\n", hash, name, salary);
+
     return 1;
 }
 
@@ -205,34 +225,36 @@ int updateSalary(hashRecord **table, size_t table_size,
                  const char *key, uint32_t new_salary,
                  uint32_t *old_salary_out, int priority)
 {
-    // Compute hash and bucket index
-    uint32_t hash  = one_at_a_time_hash((const uint8_t *)key, strlen(key));
-    size_t   index = hash % table_size;
+    uint32_t hash = one_at_a_time_hash((const uint8_t *)key, strlen(key));
+    size_t index = hash % table_size;
 
-    char log_buf[256];
-    snprintf(log_buf, sizeof(log_buf), "UPDATE,%u,%s,%u", hash, key, new_salary);
-    log_message(priority, log_buf);
-
-    // Acquire write lock for this bucket
+    //acquire write lock and log
+    action_msg(priority, "UPDATE" , hash, key, new_salary);
     rwlock_acquire_writelock(&locks[index], priority);
 
     hashRecord *current = table[index];
-
     while (current != NULL) {
         if (strcmp(current->name, key) == 0) {
-            // Found the record; capture old salary then update
-            if (old_salary_out != NULL) {
-                *old_salary_out = current->salary;
-            }
+
+            uint32_t old = current->salary;
+            if (old_salary_out) *old_salary_out = old;
+
             current->salary = new_salary;
 
+            // Output as expected
+            printf("Updated record %u from %u,%s,%u to %u,%s,%u\n",
+                hash,
+                hash, current->name, old,
+                hash, current->name, new_salary
+            );
+
             rwlock_release_writelock(&locks[index], priority);
+
             return 1;
         }
         current = current->next;
     }
 
-    // Not found
     rwlock_release_writelock(&locks[index], priority);
     return 0;
 }
@@ -240,41 +262,33 @@ int updateSalary(hashRecord **table, size_t table_size,
 // MARK: Delete
 // Added delete(), 11/16/2025, Kimari Guthre
 // Making assumption that each hashRecord in table is dynamically allocated.
-int delete(hashRecord** table, size_t table_size, const char* key, int priority) {
-    // Following convention of updateSalary(), not relying on search...
+int delete(hashRecord** table, size_t table_size, const char* key, int priority)
+{
     uint32_t hash = one_at_a_time_hash((const uint8_t*)key, strlen(key));
     size_t index = hash % table_size;
-
-    char log_buf[256];
-    snprintf(log_buf, sizeof(log_buf), "DELETE,%u,%s", hash, key);
-    log_message(priority, log_buf);
-
-    // Acquire write lock for this bucket
+    //acquire write lock
     rwlock_acquire_writelock(&locks[index], priority);
 
-    // Since each bucket is a linked list, need to keep past entry to stitch list back together.
-    hashRecord* past = NULL;
-    hashRecord* current = table[index];
+    hashRecord *prev = NULL;
+    hashRecord *cur  = table[index];
 
-    while (current != NULL) {
-        if (strcmp(current->name, key) == 0) {
-            // Found the record, proceed with delete.
-            if (past != NULL)
-                past->next = current->next;
-            else
-                table[index] = current->next;
-            
-            free(current);
+    while (cur != NULL) {
+        if (strcmp(cur->name, key) == 0) {
 
-            // Release lock and return success.
+            if (prev == NULL) table[index] = cur->next;
+            else prev->next = cur->next;
+            //log here for proper salary
+            action_msg(priority, "DELETE" , hash, key, cur->salary);
+            printf("Deleted record for %u,%s,%u\n", cur->hash, cur->name, cur->salary);
+
+            free(cur);
             rwlock_release_writelock(&locks[index], priority);
             return 1;
         }
-        past = current;
-        current = current->next;
+        prev = cur;
+        cur = cur->next;
     }
 
-    // Not found
     rwlock_release_writelock(&locks[index], priority);
     return 0;
 }
@@ -282,84 +296,151 @@ int delete(hashRecord** table, size_t table_size, const char* key, int priority)
 // MARK: Print
 //Added print functions: Jasmine Narayan 11/18
 // Sort by hash, then by name for deterministic output
-static int _print_row_cmp(const void *a, const void *b) {
-    const _print_row_t *ra = (const _print_row_t*)a;
-    const _print_row_t *rb = (const _print_row_t*)b;
-    if (ra->hash < rb->hash) return -1;
-    if (ra->hash > rb->hash) return  1;
-    return strcmp(ra->name, rb->name);
+// static int _print_row_cmp(const void *a, const void *b) {
+//     const _print_row_t *ra = (const _print_row_t*)a;
+//     const _print_row_t *rb = (const _print_row_t*)b;
+//     if (ra->hash < rb->hash) return -1;
+//     if (ra->hash > rb->hash) return  1;
+//     return strcmp(ra->name, rb->name);
+// }
+
+// // Minimal logger using clock() (avoid struct timeval)
+//  static long long _now_us_local(void) {
+//      return (long long)((double)clock() * 1000000.0 / (double)CLOCKS_PER_SEC);
+//  }
+//  static void _log_line_local(FILE *logf, int priority, const char *msg) {
+//      if (!logf) return;
+//      fprintf(logf, "%lld THREAD %d %s\n", _now_us_local(), priority, msg);
+//      fflush(logf);
+//  }
+
+// // Takes a READ lock per bucket, snapshots all nodes, sorts by hash->name, prints a stable listing
+//  /*
+//  * Usage from PRINT thread:
+//  *   FILE *logf = fopen("hash.log","a"); // or reuse a shared FILE*
+//  *   print_table(table, table_size, my_priority, logf, stdout);
+//  */
+// void print_table(hashRecord **table,
+//                  size_t table_size,
+//                  int priority,
+//                  FILE *logf,
+//                  FILE *out)
+// {
+//     if (!table || !out) return;
+
+//     size_t cap = 64, n = 0;
+//     _print_row_t *rows = (_print_row_t*)malloc(cap * sizeof(_print_row_t));
+//     if (!rows) return;
+
+//     for (size_t i = 0; i < table_size; i++) {
+//         // Acquire READ lock for this bucket if you have locks[]
+//         rwlock_acquire_readlock(&locks[i], priority);
+//         _log_line_local(logf, priority, "READ LOCK ACQUIRED");
+
+//         for (hashRecord *cur = table[i]; cur; cur = cur->next) {
+//             if (n == cap) {
+//                 cap *= 2;
+//                 _print_row_t *tmp = (_print_row_t*)realloc(rows, cap * sizeof(_print_row_t));
+//                 if (!tmp) { /* OOM */ break; }
+//                 rows = tmp;
+//             }
+
+//             // Use stored hash if present; otherwise compute defensively
+//             uint32_t h = cur->hash ? cur->hash
+//                                    : one_at_a_time_hash((const uint8_t*)cur->name,
+//                                                         strlen(cur->name));
+
+//             rows[n].hash = h;
+//             // Copy name safely (struct has name[50])
+//             strncpy(rows[n].name, cur->name, sizeof(rows[n].name));
+//             rows[n].name[sizeof(rows[n].name) - 1] = '\0';
+//             rows[n].salary = cur->salary;
+//             n++;
+//         }
+
+//         rwlock_release_readlock(&locks[i], priority);
+//         _log_line_local(logf, priority, "READ LOCK RELEASED");
+//     }
+
+//     // ordering
+//     qsort(rows, n, sizeof(_print_row_t), _print_row_cmp);
+
+//     fprintf(out, "Current Database:\n");
+//     for (size_t i = 0; i < n; i++) {
+//         fprintf(out, "%u,%s,%u\n", rows[i].hash, rows[i].name, rows[i].salary);
+//     }
+
+//     free(rows);
+// }
+
+// helper function for print_table
+int compare_rows(const void *a, const void *b) {
+    const _print_row_t *rowA = (const _print_row_t*)a;
+    const _print_row_t *rowB = (const _print_row_t*)b;
+    if (rowA->hash < rowB->hash) return -1;
+    else if (rowA->hash > rowB->hash) return 1;
+    else return 0;
 }
 
-// Minimal logger using clock() (avoid struct timeval)
-static long long _now_us_local(void) {
-    return (long long)((double)clock() * 1000000.0 / (double)CLOCKS_PER_SEC);
-}
-static void _log_line_local(FILE *logf, int priority, const char *msg) {
-    if (!logf) return;
-    fprintf(logf, "%lld THREAD %d %s\n", _now_us_local(), priority, msg);
-    fflush(logf);
-}
+void print_table(hashRecord **table, size_t table_size, int priority) {
+    // Acquire read locks for all buckets
+    for (size_t i = 0; i < table_size; i++)
+        rwlock_acquire_readlock(&locks[i], priority);
 
-// Takes a READ lock per bucket, snapshots all nodes, sorts by hash->name, prints a stable listing
- /*
- * Usage from PRINT thread:
- *   FILE *logf = fopen("hash.log","a"); // or reuse a shared FILE*
- *   print_table(table, table_size, my_priority, logf, stdout);
- */
-void print_table(hashRecord **table,
-                 size_t table_size,
-                 int priority,
-                 FILE *logf,
-                 FILE *out)
-{
-    if (!table || !out) return;
+    action_msg(priority, "PRINT TABLE", 0, "", 0);
 
-    size_t cap = 64, n = 0;
-    _print_row_t *rows = (_print_row_t*)malloc(cap * sizeof(_print_row_t));
-    if (!rows) return;
-
+    // Count total records
+    size_t total_records = 0;
     for (size_t i = 0; i < table_size; i++) {
-        // Acquire READ lock for this bucket if you have locks[]
-        // rwlock_aquire_readlock(&locks[i]);  // UNCOMMENT IF USING LOCKS
-        _log_line_local(logf, priority, "READ LOCK ACQUIRED");
-
-        for (hashRecord *cur = table[i]; cur; cur = cur->next) {
-            if (n == cap) {
-                cap *= 2;
-                _print_row_t *tmp = (_print_row_t*)realloc(rows, cap * sizeof(_print_row_t));
-                if (!tmp) { /* OOM */ break; }
-                rows = tmp;
-            }
-
-            // Use stored hash if present; otherwise compute defensively
-            uint32_t h = cur->hash ? cur->hash
-                                   : one_at_a_time_hash((const uint8_t*)cur->name,
-                                                        strlen(cur->name));
-
-            rows[n].hash = h;
-            // Copy name safely (struct has name[50])
-            strncpy(rows[n].name, cur->name, sizeof(rows[n].name));
-            rows[n].name[sizeof(rows[n].name) - 1] = '\0';
-            rows[n].salary = cur->salary;
-            n++;
+        hashRecord *cur = table[i];
+        while (cur) {
+            total_records++;
+            cur = cur->next;
         }
-
-        // rwlock_release_readlock(&locks[i]);  // UNCOMMENT IF USING LOCKS
-        _log_line_local(logf, priority, "READ LOCK RELEASED");
     }
 
-    // Deterministic order for grading
-    qsort(rows, n, sizeof(_print_row_t), _print_row_cmp);
-
-    // Adjust format to match your rubric exactly if neede
-    fprintf(out, "PRINT Current Database:\n");
-    for (size_t i = 0; i < n; i++) {
-        // Format: <hash>,<name>,<salary>
-        fprintf(out, "%u,%s,%u\n", rows[i].hash, rows[i].name, rows[i].salary);
+    if (total_records == 0) {
+        printf("Current Database:\n<empty>\n");
+        for (size_t i = 0; i < table_size; i++)
+            rwlock_release_readlock(&locks[i], priority);
+        return;
     }
+
+    // Collect all records in a temporary array
+    _print_row_t *rows = malloc(total_records * sizeof(_print_row_t));
+    if (!rows) {
+        fprintf(stderr, "Failed to allocate memory for print_table\n");
+        for (size_t i = 0; i < table_size; i++)
+            rwlock_release_readlock(&locks[i], priority);
+        return;
+    }
+
+    size_t idx = 0;
+    for (size_t i = 0; i < table_size; i++) {
+        hashRecord *cur = table[i];
+        while (cur) {
+            rows[idx].hash = cur->hash;
+            strncpy(rows[idx].name, cur->name, sizeof(rows[idx].name));
+            rows[idx].name[sizeof(rows[idx].name)-1] = '\0';
+            rows[idx].salary = cur->salary;
+            idx++;
+            cur = cur->next;
+        }
+    }
+
+    // Release all locks before printing
+    for (size_t i = 0; i < table_size; i++)
+        rwlock_release_readlock(&locks[i], priority);
+
+    // Sort by hash as expected
+    qsort(rows, total_records, sizeof(_print_row_t),
+          (int(*)(const void*, const void*))compare_rows);
+
+    // Print everything in database
+    printf("Current Database:\n");
+    for (size_t i = 0; i < total_records; i++)
+        printf("%u,%s,%u\n", rows[i].hash, rows[i].name, rows[i].salary);
 
     free(rows);
 }
 
-//if not logging yet, pass NULL for logf, logging is optional
-// if we have a locks[]array, uncomment the two lines in the loop to acquire/release READ locks

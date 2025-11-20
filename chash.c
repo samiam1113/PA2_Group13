@@ -32,6 +32,7 @@ int       updateSalary(hashRecord **table, size_t table_size, const char *key, u
 int       delete(hashRecord **table, size_t table_size, const char *key, int priority);
 char*     search(hashRecord **table, size_t table_size, const char *key, int priority);
 void      print_table(hashRecord **table, size_t table_size, int priority, FILE *logf, FILE *out);
+int       compare_rows(const void *a, const void *b);
 
 // ---------- start-order control (CV) ----------
 static pthread_mutex_t turn_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -98,31 +99,70 @@ static void* worker(void *vp) {
     pthread_mutex_unlock(&turn_mu);
 
     // execute
+    // switch (t.type) {
+    //     case CMD_INSERT: {
+    //         int rc = insert(a->table, a->table_sz, t.name, t.value, t.priority);
+    //         //printf("INSERTED %s %s\n", t.name, rc==1 ? "Inserted" : (rc==0 ? "Exists" : "Failed"));
+    //         printf("INSERTED %d, %s, %d\n", one_at_a_time_hash((const uint8_t*)t.name, strlen(t.name)), t.name, t.value);
+    //     } break;
+    //     case CMD_UPDATE: {
+    //         uint32_t old=0;
+    //         int rc = updateSalary(a->table, a->table_sz, t.name, t.value, &old, t.priority);
+    //         // if (rc==1) printf("UPDATE %s from %u to %u\n", t.name, old, t.value);
+    //         // else       printf("UPDATE %s not found\n", t.name);
+    //         printf("UPDATED RECORD %u from %u,%s,%u to %u, %s, %u\n", 
+    //             one_at_a_time_hash((const uint8_t*)t.name, strlen(t.name)),
+    //             one_at_a_time_hash((const uint8_t*)t.name, strlen(t.name)), t.name, old,
+    //             one_at_a_time_hash((const uint8_t*)t.name, strlen(t.name)), t.name, t.value
+    //         );
+    //         //else       printf("UPDATE %s not found\n", t.name);
+    //     } break;
+    //     case CMD_DELETE: {
+    //         int rc = delete(a->table, a->table_sz, t.name, t.priority);
+    //         //printf("DELETE %s %s\n", t.name, rc==1 ? "Deleted" : "Not found");
+    //         printf("DELETED %u, %s,\n", one_at_a_time_hash((const uint8_t*)t.name, strlen(t.name)), t.name);
+    //         //else       printf("DELETE %s not found\n", t.name);
+    //     } break;
+    //     case CMD_SEARCH: {
+    //         char *p = search(a->table, a->table_sz, t.name, t.priority);
+    //         // if (p) printf("SEARCH Found: %s\n", p);
+    //         // else   printf("SEARCH %s not found\n", t.name);
+    //         // if(p)
+    //         // printf("FOUND: %u, %s\n", one_at_a_time_hash((const uint8_t*)t.name, strlen(t.name)), p);
+    //         // else   printf("SEARCH %s not found\n", t.name);
+    //     } break;
+    //     case CMD_PRINT: {
+    //         //printf("Current Database:\n");
+    //         print_table(a->table, a->table_sz, t.priority, global_log, stdout);
+    //         printf("PRINT completed\n");
+    //     } break;
+    //     default: break;
+    // }
+
+    //included prints in hashfunctoins.c functions so just call them here and dont print
     switch (t.type) {
-        case CMD_INSERT: {
-            int rc = insert(a->table, a->table_sz, t.name, t.value, t.priority);
-            printf("INSERT %s %s\n", t.name, rc==1 ? "Inserted" : (rc==0 ? "Exists" : "Failed"));
-        } break;
-        case CMD_UPDATE: {
-            uint32_t old=0;
-            int rc = updateSalary(a->table, a->table_sz, t.name, t.value, &old, t.priority);
-            if (rc==1) printf("UPDATE %s from %u to %u\n", t.name, old, t.value);
-            else       printf("UPDATE %s not found\n", t.name);
-        } break;
-        case CMD_DELETE: {
-            int rc = delete(a->table, a->table_sz, t.name, t.priority);
-            printf("DELETE %s %s\n", t.name, rc==1 ? "Deleted" : "Not found");
-        } break;
-        case CMD_SEARCH: {
-            char *p = search(a->table, a->table_sz, t.name, t.priority);
-            if (p) printf("SEARCH Found: %s\n", p);
-            else   printf("SEARCH %s not found\n", t.name);
-        } break;
-        case CMD_PRINT: {
-            print_table(a->table, a->table_sz, t.priority, global_log, stdout);
-        } break;
-        default: break;
+    case CMD_INSERT:
+        insert(a->table, a->table_sz, t.name, t.value, t.priority);
+        break;
+    case CMD_UPDATE: {
+        uint32_t old = 0;
+        updateSalary(a->table, a->table_sz, t.name, t.value, &old, t.priority);
+        break;
     }
+    case CMD_DELETE:
+        delete(a->table, a->table_sz, t.name, t.priority);
+        break;
+    case CMD_SEARCH:
+        search(a->table, a->table_sz, t.name, t.priority);
+        break;
+    case CMD_PRINT:
+        print_table(a->table, a->table_sz, t.priority, global_log, stdout);
+        printf("PRINT completed\n");
+        break;
+    default:
+        break;
+}
+
     return NULL;
 }
 
