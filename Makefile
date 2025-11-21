@@ -4,7 +4,7 @@ CC      := gcc
 CFLAGS  := -std=c11 -Wall -Wextra -O2
 LDFLAGS := -pthread -lwinpthread
 BIN     := chash
-SRC     := chash.c HashFunctions.c
+SRC     := chash.c HashFunctions.c HashFunctions.h locks.c locks.h
 OBJ     := $(SRC:.c=.o)
 
 .PHONY: all run clean

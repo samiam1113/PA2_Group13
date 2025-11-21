@@ -9,29 +9,13 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <ctype.h>
+#include "HashFunctions.h"
 
 #ifdef _WIN32
 #include <direct.h>
 #endif
 
-// ----- prototypes & globals provided by HashFunctions.c -----
-typedef struct hash_struct {
-    uint32_t hash;
-    char     name[50];
-    uint32_t salary;
-    struct hash_struct *next;
-} hashRecord;
-
 extern FILE *global_log;
-void     init_locks(size_t table_size);
-void     destroy_locks(size_t table_size);
-
-uint32_t one_at_a_time_hash(const uint8_t* key, size_t length);
-int       insert(hashRecord **table, size_t table_size, const char *name, uint32_t salary, int priority);
-int       updateSalary(hashRecord **table, size_t table_size, const char *key, uint32_t new_salary, uint32_t *old_salary_out, int priority);
-int       delete(hashRecord **table, size_t table_size, const char *key, int priority);
-char*     search(hashRecord **table, size_t table_size, const char *key, int priority);
-void      print_table(hashRecord **table, size_t table_size, int priority, FILE *logf, FILE *out);
 
 // ---------- start-order control (CV) ----------
 static pthread_mutex_t turn_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -98,28 +82,40 @@ static void* worker(void *vp) {
     pthread_mutex_unlock(&turn_mu);
 
     // execute
+    // There was probably a far, far better way to refactor this so the prints worked. But I couldn't find it. -Kimari Guthre
     switch (t.type) {
         case CMD_INSERT: {
-            int rc = insert(a->table, a->table_sz, t.name, t.value, t.priority);
-            printf("INSERT %s %s\n", t.name, rc==1 ? "Inserted" : (rc==0 ? "Exists" : "Failed"));
+            uint32_t outputHash = 0;
+            int rc = insert(a->table, a->table_sz, t.name, t.value, t.priority, &outputHash);
+            if (rc == 1)
+                printf("Inserted %u,%s,%d\n", outputHash, t.name, t.value);
+            else
+                printf(rc==0 ? "Insert failed, entry exists" : "Insert failed, new node could not be made");
         } break;
         case CMD_UPDATE: {
             uint32_t old=0;
-            int rc = updateSalary(a->table, a->table_sz, t.name, t.value, &old, t.priority);
-            if (rc==1) printf("UPDATE %s from %u to %u\n", t.name, old, t.value);
-            else       printf("UPDATE %s not found\n", t.name);
+            uint32_t outputHash = 0;
+            int rc = updateSalary(a->table, a->table_sz, t.name, t.value, &old, t.priority, &outputHash);
+            if (rc == 1) 
+                printf("Updated record %u from %u,%s,%u to %u,%s,%u\n", outputHash, outputHash, t.name, old, outputHash, t.name, t.value);
+            else
+                printf("%s not found.\n", t.name);
         } break;
         case CMD_DELETE: {
-            int rc = delete(a->table, a->table_sz, t.name, t.priority);
-            printf("DELETE %s %s\n", t.name, rc==1 ? "Deleted" : "Not found");
+            hashRecord deletedRecord;
+            int rc = deleteRecord(a->table, a->table_sz, t.name, t.priority, &deletedRecord);
+            if (rc == 1)
+                printf("Deleted record for %u,%s,%u.", deletedRecord.hash, deletedRecord.name, deletedRecord.salary);
+            else
+                printf("%s not found.\n", t.name);
         } break;
         case CMD_SEARCH: {
-            char *p = search(a->table, a->table_sz, t.name, t.priority);
-            if (p) printf("SEARCH Found: %s\n", p);
-            else   printf("SEARCH %s not found\n", t.name);
+            hashRecord *p = search(a->table, a->table_sz, t.name, t.priority);
+            if (p) printf("Found: %u,%s,%d\n", p->hash, p->name, p->salary);
+            else   printf("%s not found.\n", t.name);
         } break;
         case CMD_PRINT: {
-            print_table(a->table, a->table_sz, t.priority, global_log, stdout);
+            print_table(a->table, a->table_sz, t.priority, stdout);
         } break;
         default: break;
     }

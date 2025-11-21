@@ -1,0 +1,4 @@
+*.o
+hash.log
+chash
+chash.exe
