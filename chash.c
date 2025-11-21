@@ -1,5 +1,5 @@
 // chash.c — threaded driver for PA#2
-// Build:  make          (see Makefile below)
+// Build:  make
 // Run:    ./chash [commands-file]   (defaults to commands.txt)
 
 #define _GNU_SOURCE
@@ -10,8 +10,8 @@
 #include <pthread.h>
 #include <ctype.h>
 #include "HashFunctions.h"
+#include "locks.h"
 #include <stdbool.h>
-
 
 #ifdef _WIN32
 #include <direct.h>
@@ -50,6 +50,7 @@ static void trim(char *s){
     size_t n=strlen(s);
     while (n && (s[n-1]=='\r'||s[n-1]=='\n'||s[n-1]==' '||s[n-1]=='\t')) s[--n]='\0';
 }
+
 static int split4(char *line, char **a, char **b, char **c, char **d){
     *a = strtok(line, ",");
     *b = strtok(NULL, ",");
@@ -57,6 +58,7 @@ static int split4(char *line, char **a, char **b, char **c, char **d){
     *d = strtok(NULL, ",");
     return (*a!=NULL);
 }
+
 static char* my_strdup(const char* s){
     size_t n = strlen(s)+1;
     char *p = (char*)malloc(n);
@@ -84,7 +86,6 @@ static void* worker(void *vp) {
     pthread_mutex_unlock(&turn_mu);
 
     // execute
-    // There was probably a far, far better way to refactor this so the prints worked. But I couldn't find it. -Kimari Guthre
     switch (t.type) {
         case CMD_INSERT: {
             uint32_t outputHash = 0;
@@ -92,7 +93,7 @@ static void* worker(void *vp) {
             if (rc == 1)
                 printf("Inserted %u,%s,%d\n", outputHash, t.name, t.value);
             else
-                printf(rc==0 ? "Insert failed, entry exists" : "Insert failed, new node could not be made");
+                printf(rc==0 ? "Insert failed, entry exists\n" : "Insert failed, new node could not be made\n");
         } break;
         case CMD_UPDATE: {
             uint32_t old=0;
@@ -107,7 +108,7 @@ static void* worker(void *vp) {
             hashRecord deletedRecord;
             int rc = deleteRecord(a->table, a->table_sz, t.name, t.priority, &deletedRecord);
             if (rc == 1)
-                printf("Deleted record for %u,%s,%u.", deletedRecord.hash, deletedRecord.name, deletedRecord.salary);
+                printf("Deleted record for %u,%s,%u\n", deletedRecord.hash, deletedRecord.name, deletedRecord.salary);
             else
                 printf("%s not found.\n", t.name);
         } break;
@@ -122,6 +123,15 @@ static void* worker(void *vp) {
         default: break;
     }
     return NULL;
+}
+
+// Comparison function for sorting final table by hash
+static int cmp_by_hash(const void *a, const void *b) {
+    const hashRecord *ra = *(const hashRecord **)a;
+    const hashRecord *rb = *(const hashRecord **)b;
+    if (ra->hash < rb->hash) return -1;
+    if (ra->hash > rb->hash) return 1;
+    return strcmp(ra->name, rb->name);
 }
 
 // ---------- main ----------
@@ -143,7 +153,7 @@ int main(int argc, char **argv) {
     if (!table) { perror("calloc table"); fclose(f); return 1; }
     init_locks(table_size);
 
-    global_log = fopen("hash.log","w"); // your HashFunctions.c uses this pointer
+    global_log = fopen("hash.log","w");
 
     // parse commands
     task_t *tasks=NULL; size_t n=0, cap=64;
@@ -186,12 +196,52 @@ int main(int argc, char **argv) {
         pthread_create(&ths[i], NULL, worker, &args[i]);
     }
     for (size_t i=0;i<n;i++) pthread_join(ths[i], NULL);
-    // --- REQUIRED BY SPEC: always emit one final PRINT of the database state ---
-print_table(table, table_size, /*priority=*/0, stdout);
-fflush(stdout);
+    
+    // Only print final database if last command wasn't already a print
+    if (!last_cmd_is_print) {
+        print_table(table, table_size, 0, stdout);
+    }
+    fflush(stdout);
 
+    // Print statistics and final sorted table to hash.log
+    if (global_log) {
+        fprintf(global_log, "Number of lock acquisitions: %d\n", get_total_acquisitions());
+        fprintf(global_log, "Number of lock releases: %d\n", get_total_releases());
+        fprintf(global_log, "Final Table:\n");
+        
+        // Collect all records
+        hashRecord **all_records = NULL;
+        size_t record_count = 0, record_cap = 64;
+        all_records = (hashRecord**)malloc(record_cap * sizeof(hashRecord*));
+        
+        for (size_t i = 0; i < table_size; i++) {
+            hashRecord *cur = table[i];
+            while (cur) {
+                if (record_count == record_cap) {
+                    record_cap *= 2;
+                    all_records = (hashRecord**)realloc(all_records, record_cap * sizeof(hashRecord*));
+                }
+                all_records[record_count++] = cur;
+                cur = cur->next;
+            }
+        }
+        
+        // Sort by hash
+        qsort(all_records, record_count, sizeof(hashRecord*), cmp_by_hash);
+        
+        // Print sorted records
+        for (size_t i = 0; i < record_count; i++) {
+            fprintf(global_log, "%u,%s,%u\n", 
+                    all_records[i]->hash, 
+                    all_records[i]->name, 
+                    all_records[i]->salary);
+        }
+        
+        free(all_records);
+        fclose(global_log);
+        global_log = NULL;
+    }
 
-    if (global_log) { fclose(global_log); global_log=NULL; }
     destroy_locks(table_size);
 
     // free table
