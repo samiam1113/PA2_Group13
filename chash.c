@@ -10,6 +10,8 @@
 #include <pthread.h>
 #include <ctype.h>
 #include "HashFunctions.h"
+#include <stdbool.h>
+
 
 #ifdef _WIN32
 #include <direct.h>
@@ -146,6 +148,7 @@ int main(int argc, char **argv) {
     // parse commands
     task_t *tasks=NULL; size_t n=0, cap=64;
     tasks = (task_t*)calloc(cap, sizeof(task_t));
+    bool last_cmd_is_print = false;
     char line[512];
     while (fgets(line,sizeof(line),f)) {
         trim(line);
@@ -154,6 +157,7 @@ int main(int argc, char **argv) {
         char *dup = my_strdup(line);
         char *a,*b,*c,*d; split4(dup,&a,&b,&c,&d);
         cmd_t type = parse_cmd(a);
+        last_cmd_is_print = (type == CMD_PRINT);
         if (type==CMD_UNKNOWN) { free(dup); continue; }
 
         if (n==cap) { cap*=2; tasks=(task_t*)realloc(tasks,cap*sizeof(task_t)); }
@@ -182,6 +186,10 @@ int main(int argc, char **argv) {
         pthread_create(&ths[i], NULL, worker, &args[i]);
     }
     for (size_t i=0;i<n;i++) pthread_join(ths[i], NULL);
+    // --- REQUIRED BY SPEC: always emit one final PRINT of the database state ---
+print_table(table, table_size, /*priority=*/0, stdout);
+fflush(stdout);
+
 
     if (global_log) { fclose(global_log); global_log=NULL; }
     destroy_locks(table_size);

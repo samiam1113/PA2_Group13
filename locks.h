@@ -2,6 +2,7 @@
 #define LOCKS_H
 
 #include <semaphore.h>
+long long current_timestamp(void);
 
 // ========== RW Lock Implementation (from OSTEP) ==========
 typedef struct _rwlock_t {

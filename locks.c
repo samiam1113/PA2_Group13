@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "locks.h"
 
+
 // Global log file pointer - set this before operations
 FILE *global_log = NULL;
 
