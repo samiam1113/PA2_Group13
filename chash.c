@@ -156,9 +156,9 @@ int main(int argc, char **argv) {
     global_log = fopen("hash.log","w");
 
     // parse commands
-    task_t *tasks=NULL; size_t n=0, cap=64;
-    tasks = (task_t*)calloc(cap, sizeof(task_t));
-    bool last_cmd_is_print = false;
+   task_t *tasks=NULL; size_t n=0, cap=64;
+   tasks = (task_t*)calloc(cap, sizeof(task_t));
+
     char line[512];
     while (fgets(line,sizeof(line),f)) {
         trim(line);
@@ -167,7 +167,6 @@ int main(int argc, char **argv) {
         char *dup = my_strdup(line);
         char *a,*b,*c,*d; split4(dup,&a,&b,&c,&d);
         cmd_t type = parse_cmd(a);
-        last_cmd_is_print = (type == CMD_PRINT);
         if (type==CMD_UNKNOWN) { free(dup); continue; }
 
         if (n==cap) { cap*=2; tasks=(task_t*)realloc(tasks,cap*sizeof(task_t)); }
@@ -197,10 +196,8 @@ int main(int argc, char **argv) {
     }
     for (size_t i=0;i<n;i++) pthread_join(ths[i], NULL);
     
-    // Only print final database if last command wasn't already a print
-    if (!last_cmd_is_print) {
-        print_table(table, table_size, 0, stdout);
-    }
+    // Always do a final PRINT per assignment spec (even if the last command was PRINT)
+    print_table(table, table_size, -1, stdout);
     fflush(stdout);
 
     // Print statistics and final sorted table to hash.log
