@@ -23,3 +23,12 @@ If you need to adjust parameters, the hash table size and the logging behavior a
 
 AI Citations:
 Jasmine Narayan: Used for troubleshooting and editing code https://chatgpt.com/share/692084ff-d708-8003-abee-b1e966f0b19a
+Arianna Ramirez: 
+We used AI to get a proper understanding of the project and to correct any output problems or to make skeletons.
+Used prompts such as "what is a Makefile" since we did not know what it was.
+Also used prompts such as "this is my output: and this is what is expected: why doesnt mind order correctly"
+Also has a HUGE problem with the "make" command, so used ChatGPT to address this issue (needed to redownload from mingsys).
+Besides that Copilot is built into VS Code so only used Copilot to finish writing lines for us.
+Link to gpt chat:
+https://chatgpt.com/share/691f7894-e478-800b-86dd-e9d88fc9c040 
+Samantha Rodriguez: Used as a first step for incorporating the ostep rw locks into our code https://claude.ai/chat/6452ab55-fc8e-4888-ad56-acf4040d58fa
