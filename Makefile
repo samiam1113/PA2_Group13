@@ -1,6 +1,6 @@
 CC      := gcc
 CFLAGS  := -std=c11 -Wall -Wextra -O2
-LDFLAGS := -pthread -lwinpthread
+LDFLAGS := -pthread
 BIN     := chash
 
 # Only .c files here
