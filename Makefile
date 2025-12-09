@@ -1,11 +1,13 @@
-# ===== PA2 Makefile (MSYS2 / MinGW-w64, pthreads) =====
-
 CC      := gcc
 CFLAGS  := -std=c11 -Wall -Wextra -O2
 LDFLAGS := -pthread -lwinpthread
 BIN     := chash
-SRC     := chash.c HashFunctions.c HashFunctions.h locks.c locks.h
+
+# Only .c files here
+SRC     := chash.c HashFunctions.c locks.c
 OBJ     := $(SRC:.c=.o)
+
+HEADERS := HashFunctions.h locks.h
 
 .PHONY: all run clean
 
@@ -17,7 +19,6 @@ $(BIN): $(OBJ)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# run with commands.txt (no other filenames)
 run: $(BIN)
 	./$(BIN) commands.txt
 

@@ -89,11 +89,11 @@ static void* worker(void *vp) {
     switch (t.type) {
         case CMD_INSERT: {
             uint32_t outputHash = 0;
-            int rc = insert(a->table, a->table_sz, t.name, t.value, t.priority, &outputHash);
-            if (rc == 1)
+            insert(a->table, a->table_sz, t.name, t.value, t.priority, &outputHash);
+            //if (rc == 1)
                 printf("Inserted %u,%s,%d\n", outputHash, t.name, t.value);
-            else
-                printf(rc==0 ? "Insert failed, entry exists\n" : "Insert failed, new node could not be made\n");
+            //else
+            //    printf(rc==0 ? "Insert failed, entry exists\n" : "Insert failed, new node could not be made\n");
         } break;
         case CMD_UPDATE: {
             uint32_t old=0;
